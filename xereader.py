@@ -165,19 +165,21 @@ def main():
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        activities_path = output_dir / 'activities.json'
-        critical_path_path = output_dir / 'critical_path.json'
+        # Use original XER filename (without .xer extension) for output files
+        base_filename = input_path.stem  # Gets filename without extension
+        activities_path = output_dir / f'{base_filename}_activities.json'
+        critical_path_path = output_dir / f'{base_filename}_critical_path.json'
 
         exporter = JSONExporter(project_info, activities)
         exporter.export_activities(str(activities_path))
-        log(f"✓ Generated activities.json", args.verbose, args.quiet)
+        log(f"✓ Generated {activities_path.name}", args.verbose, args.quiet)
 
         exporter.export_critical_path(
             str(critical_path_path),
             critical_paths,
             project_duration
         )
-        log(f"✓ Generated critical_path.json", args.verbose, args.quiet)
+        log(f"✓ Generated {critical_path_path.name}", args.verbose, args.quiet)
 
         # Print output summary
         if not args.quiet:

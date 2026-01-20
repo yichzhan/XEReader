@@ -50,6 +50,12 @@ python xereader.py project.xer --validate-only
 
 ## Output Files
 
+Output files are named using the input XER filename (without `.xer` extension):
+- `{filename}_activities.json` - All activities with dependencies
+- `{filename}_critical_path.json` - Critical path sequence(s)
+
+For example, `project.xer` generates `project_activities.json` and `project_critical_path.json`.
+
 ### activities.json
 
 Contains all activities with essential information:
@@ -175,10 +181,10 @@ optional arguments:
 python xereader.py project.xer --verbose
 
 # View activities
-cat activities.json | python -m json.tool | less
+cat project_activities.json | python -m json.tool | less
 
 # View critical path
-cat critical_path.json | python -m json.tool | less
+cat project_critical_path.json | python -m json.tool | less
 ```
 
 ### Batch Processing
@@ -196,7 +202,7 @@ done
 import json
 
 # Load activities
-with open('activities.json', 'r') as f:
+with open('project_activities.json', 'r') as f:
     data = json.load(f)
 
 activities = data['activities']
@@ -209,7 +215,7 @@ delayed = [a for a in activities
 print(f"Delayed activities: {len(delayed)}")
 
 # Load critical path
-with open('critical_path.json', 'r') as f:
+with open('project_critical_path.json', 'r') as f:
     cp_data = json.load(f)
 
 print(f"Project duration: {cp_data['summary']['total_duration_days']} days")
