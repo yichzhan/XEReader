@@ -24,6 +24,7 @@ from src.parser.xer_parser import XERParser
 from src.processors.activity_processor import ActivityProcessor
 from src.processors.critical_path_calculator import CriticalPathCalculator
 from src.exporters.json_exporter import JSONExporter
+from src.exporters.markdown_exporter import MarkdownExporter
 from src.utils.validators import validate_required_tables, validate_activities, ValidationError
 
 
@@ -71,6 +72,13 @@ Output:
         '--validate-only',
         action='store_true',
         help='Validate XER file without generating output'
+    )
+
+    parser.add_argument(
+        '--format',
+        choices=['json', 'markdown', 'both'],
+        default='json',
+        help='Output format (default: json)'
     )
 
     parser.add_argument(
@@ -161,34 +169,59 @@ def main():
         else:
             log("⚠ Warning: No critical path found", args.verbose, args.quiet)
 
-        # Export JSON files
+        # Export files based on format
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Use original XER filename (without .xer extension) for output files
         base_filename = input_path.stem  # Gets filename without extension
-        activities_path = output_dir / f'{base_filename}_activities.json'
-        critical_path_path = output_dir / f'{base_filename}_critical_path.json'
 
-        exporter = JSONExporter(project_info, activities)
-        exporter.export_activities(str(activities_path))
-        log(f"✓ Generated {activities_path.name}", args.verbose, args.quiet)
+        output_files = []
 
-        exporter.export_critical_path(
-            str(critical_path_path),
-            critical_paths,
-            project_duration
-        )
-        log(f"✓ Generated {critical_path_path.name}", args.verbose, args.quiet)
+        # Export JSON files
+        if args.format in ['json', 'both']:
+            activities_json_path = output_dir / f'{base_filename}_activities.json'
+            critical_path_json_path = output_dir / f'{base_filename}_critical_path.json'
+
+            json_exporter = JSONExporter(project_info, activities)
+            json_exporter.export_activities(str(activities_json_path))
+            log(f"✓ Generated {activities_json_path.name}", args.verbose, args.quiet)
+
+            json_exporter.export_critical_path(
+                str(critical_path_json_path),
+                critical_paths,
+                project_duration
+            )
+            log(f"✓ Generated {critical_path_json_path.name}", args.verbose, args.quiet)
+
+            output_files.append((activities_json_path, JSONExporter.get_file_size(str(activities_json_path))))
+            output_files.append((critical_path_json_path, JSONExporter.get_file_size(str(critical_path_json_path))))
+
+        # Export Markdown files
+        if args.format in ['markdown', 'both']:
+            activities_md_path = output_dir / f'{base_filename}_activities.md'
+            critical_path_md_path = output_dir / f'{base_filename}_critical_path.md'
+
+            md_exporter = MarkdownExporter(project_info, activities)
+            md_exporter.export_activities(str(activities_md_path))
+            log(f"✓ Generated {activities_md_path.name}", args.verbose, args.quiet)
+
+            md_exporter.export_critical_path(
+                str(critical_path_md_path),
+                critical_paths,
+                project_duration
+            )
+            log(f"✓ Generated {critical_path_md_path.name}", args.verbose, args.quiet)
+
+            output_files.append((activities_md_path, JSONExporter.get_file_size(str(activities_md_path))))
+            output_files.append((critical_path_md_path, JSONExporter.get_file_size(str(critical_path_md_path))))
 
         # Print output summary
         if not args.quiet:
             print()
             print("Output files:")
-            activities_size = JSONExporter.get_file_size(str(activities_path))
-            critical_path_size = JSONExporter.get_file_size(str(critical_path_path))
-            print(f"  - {activities_path} ({activities_size})")
-            print(f"  - {critical_path_path} ({critical_path_size})")
+            for file_path, file_size in output_files:
+                print(f"  - {file_path} ({file_size})")
             print()
 
         elapsed = time.time() - start_time
