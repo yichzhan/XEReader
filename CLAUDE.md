@@ -3,10 +3,12 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-XEReader is a Python application that parses Oracle Primavera P6 XER files and generates JSON outputs plus visual diagrams:
+XEReader is a Python application that parses Oracle Primavera P6 XER files and generates multiple output formats:
 1. **activities.json** - All activities with dates and dependencies
 2. **critical_path.json** - Critical path sequence(s)
-3. **PNG diagrams** - Visual representation of critical paths (via visualize_critical_path.py)
+3. **activities.md** - Human-readable Markdown report of all activities
+4. **critical_path.md** - Natural language critical path analysis report
+5. **PNG diagrams** - Visual representation of critical paths (via visualize_critical_path.py)
 
 **Execution Model:** Direct Python scripts (no installation required)
 
@@ -22,8 +24,14 @@ pip install -r requirements.txt
 
 ### Run Parser
 ```bash
-# Basic usage - generates JSON files
+# Basic usage - generates JSON files (default)
 python xereader.py input.xer
+
+# Generate Markdown reports instead
+python xereader.py input.xer --format markdown
+
+# Generate both JSON and Markdown
+python xereader.py input.xer --format both
 
 # With options
 python xereader.py input.xer --output-dir ./output --verbose
@@ -78,10 +86,10 @@ XEReader/
 
 ### Data Flow
 ```
-XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter → Visualization
-                         ↓                                      ↓              ↓
-                    Dependencies                          activities.json  PNG diagrams
-                                                         critical_path.json
+XER File → Parser → Activity Objects → CPM Calculator → Exporters → Outputs
+                         ↓                                   ↓
+                    Dependencies                    JSON / Markdown / PNG
+                                                   (selectable via --format)
 ```
 
 ### Key Components
@@ -103,10 +111,13 @@ XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter �
    - Calculates total float
    - Identifies longest path(s)
 
-4. **JSON Exporter** (`src/exporters/json_exporter.py`)
-   - Generates activities.json
-   - Generates critical_path.json
-   - Ensures schema compliance
+4. **Exporters** (`src/exporters/`)
+   - **JSON Exporter** - Generates activities.json and critical_path.json with schema compliance
+   - **Markdown Exporter** - Generates human-readable reports with natural language formatting
+     - Handles both dict and object inputs (ProjectInfo, Activity dataclasses)
+     - Formats dependencies with relationship types (FS, SS, FF, SF) and lag
+     - Uses compact single-line format for critical path activities
+     - Date format: `YYYY-MM-DD HH:MM`
 
 5. **Visualization Tool** (`visualize_critical_path.py`)
    - Reads critical_path.json
@@ -132,11 +143,17 @@ XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter �
    - Proper CPM definition using NetworkX
 
 4. **Output file naming convention**
-   - `{filename}_activities.json` - uses input XER filename without .xer extension
-   - `{filename}_critical_path.json`
+   - `{filename}_activities.json` / `{filename}_activities.md` - uses input XER filename without .xer extension
+   - `{filename}_critical_path.json` / `{filename}_critical_path.md`
    - `{filename}_critical_path_path{N}.png` - separate file per critical path
 
-5. **Horizontal diagram layout**
+5. **Multiple output formats**
+   - JSON for programmatic use (default)
+   - Markdown for human readability with natural language style
+   - PNG for visual representation
+   - Selectable via `--format {json,markdown,both}` flag
+
+6. **Horizontal diagram layout**
    - Left-to-right flow (not vertical)
    - Grid-based positioning with automatic wrapping
    - Wrapping arrows route through space between rows
@@ -188,6 +205,14 @@ XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter �
 3. Update tests and examples
 4. Document in design_decisions.md
 
+### Add a New Export Format
+1. Create exporter class in `src/exporters/`
+2. Handle both dict and object inputs (use `hasattr()` checks)
+3. Update `xereader.py` to integrate new exporter
+4. Update `--format` CLI argument choices
+5. Add output file pattern to `.gitignore`
+6. Update documentation
+
 ### Modify Visualization Layout
 1. Update `draw_critical_path_diagram()` in visualize_critical_path.py
 2. Key parameters: `boxes_per_row`, `box_width`, `box_height`, `horizontal_spacing`, `vertical_spacing`
@@ -237,8 +262,9 @@ XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter �
 - [design_decisions.md](design_decisions.md) - Design rationale
 - [activities_json_schema.md](activities_json_schema.md) - activities.json spec
 - [critical_path_json_schema.md](critical_path_json_schema.md) - critical_path.json spec
+- [markdown_export_design.md](markdown_export_design.md) - Markdown export specifications
 
 ---
 
-**Version:** 2.0
+**Version:** 2.1
 **Last Updated:** 2026-01-21
