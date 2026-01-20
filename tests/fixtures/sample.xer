@@ -1,0 +1,20 @@
+ERMHDR	1.0	2026-01-20	08:00
+%T	PROJECT
+%F	proj_id	proj_short_name	proj_name
+%R	1	PRJ-2026-001	Sample Construction Project
+%T	TASK
+%F	task_id	task_code	task_name	target_start_date	target_end_date	act_start_date	act_end_date
+%R	1000	A1000	Notice to Proceed	2026-01-15 08:00	2026-01-15 08:00	2026-01-15 08:00	2026-01-15 08:00
+%R	1001	A1010	Site Mobilization	2026-02-01 08:00	2026-02-05 17:00	2026-02-03 08:00
+%R	1002	A1020	Excavation	2026-02-06 08:00	2026-02-12 17:00
+%R	1003	A1030	Foundation	2026-02-13 08:00	2026-02-20 17:00
+%R	1004	A2000	Structural Steel	2026-02-21 08:00	2026-03-10 17:00
+%R	1005	A3000	Project Complete	2026-03-10 17:00	2026-03-10 17:00
+%T	TASKPRED
+%F	task_id	pred_task_id	pred_type	lag_hr_cnt
+%R	1001	1000	PR_FS	0
+%R	1002	1001	PR_FS	0
+%R	1003	1002	PR_FS	0
+%R	1004	1003	PR_FS	0
+%R	1005	1004	PR_FS	0
+%E
