@@ -18,6 +18,7 @@ XEReader is a Python application that parses Oracle Primavera P6 XER files and g
 - ✅ **Multiple Critical Paths** - Supports and separately identifies all critical paths
 - ✅ **Fast Processing** - Handles 3000+ activities in under 1 second
 - ✅ **Comprehensive Validation** - Data integrity checks throughout
+- ✅ **Visual Diagrams** - Generate PNG diagrams from critical path JSON
 
 ## Quick Start
 
@@ -46,6 +47,22 @@ python xereader.py project.xer --verbose
 
 # Validate only (no output files)
 python xereader.py project.xer --validate-only
+```
+
+### Visualize Critical Path
+
+```bash
+# Generate diagram from critical path JSON
+python visualize_critical_path.py project_critical_path.json
+
+# Visualize only a specific path (for multiple critical paths)
+python visualize_critical_path.py project_critical_path.json --path-id 1
+
+# Specify output file
+python visualize_critical_path.py project_critical_path.json --output diagram.png
+
+# Customize diagram dimensions
+python visualize_critical_path.py project_critical_path.json --box-width 4 --box-height 1.5
 ```
 
 ## Output Files
@@ -171,6 +188,64 @@ optional arguments:
   --validate-only       Validate XER file without generating output
   --version             show program's version number and exit
 ```
+
+## Critical Path Visualization
+
+The `visualize_critical_path.py` tool generates visual diagrams from critical path JSON files.
+
+### Features
+
+- **Task Boxes**: Each activity shown as a box with task code and name
+- **Sequential Flow**: Arrows connect tasks in sequence
+- **Multiple Paths**: Side-by-side display when multiple critical paths exist
+- **Color Coding**: Primary path (green) vs alternate paths (orange)
+- **Sequence Numbers**: Small numbered badges show position in sequence
+- **Project Summary**: Duration, path count, and activity count displayed
+- **Customizable**: Adjust box sizes, spacing, and layout
+
+### Usage
+
+```bash
+# Basic usage - generates diagram with all critical paths
+python visualize_critical_path.py project_critical_path.json
+
+# Output: project_critical_path.png
+
+# Visualize only path 1 (useful for large projects)
+python visualize_critical_path.py project_critical_path.json --path-id 1
+
+# Custom output filename
+python visualize_critical_path.py project_critical_path.json --output my_diagram.png
+
+# Adjust diagram layout
+python visualize_critical_path.py project_critical_path.json \
+  --box-width 4.0 \
+  --box-height 1.5 \
+  --vertical-spacing 2.0
+```
+
+### Command Line Options
+
+```
+positional arguments:
+  json_file             Path to critical_path.json file
+
+optional arguments:
+  -o, --output          Output image file path
+  --path-id             Visualize only specific path ID
+  --figsize-width       Figure width (default: 20)
+  --box-width           Task box width (default: 3.5)
+  --box-height          Task box height (default: 1.2)
+  --vertical-spacing    Vertical spacing between tasks (default: 1.8)
+  --horizontal-spacing  Horizontal spacing between paths (default: 4.5)
+```
+
+### Output Format
+
+- **Format**: PNG image (300 DPI, high quality)
+- **Dimensions**: Auto-calculated based on number of activities
+- **Text**: Activity codes (bold) and names (wrapped to fit)
+- **Visual Elements**: Rounded boxes, directional arrows, color-coded paths
 
 ## Examples
 
