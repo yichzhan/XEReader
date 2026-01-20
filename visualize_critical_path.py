@@ -3,9 +3,10 @@
 Critical Path Visualizer
 
 Generates a visual diagram from critical_path.json showing:
-- Task boxes with code and name
+- Task boxes with code and name (horizontal layout)
 - Sequential connections with arrows
 - Multiple critical paths (if present)
+- Maximum 20 boxes per line with automatic wrapping
 
 Usage:
     python visualize_critical_path.py critical_path.json
@@ -29,7 +30,7 @@ def load_critical_path_json(file_path: str) -> dict:
         return json.load(f)
 
 
-def wrap_text(text: str, width: int = 30) -> str:
+def wrap_text(text: str, width: int = 20) -> str:
     """Wrap long text to fit in boxes"""
     return '\n'.join(textwrap.wrap(text, width=width))
 
@@ -38,24 +39,24 @@ def draw_critical_path_diagram(
     data: dict,
     output_path: str,
     path_id: int = None,
-    figsize_width: int = 20,
-    box_width: float = 3.5,
-    box_height: float = 1.2,
-    vertical_spacing: float = 1.8,
-    horizontal_spacing: float = 4.5
+    boxes_per_row: int = 20,
+    box_width: float = 2.8,
+    box_height: float = 1.0,
+    horizontal_spacing: float = 3.2,
+    vertical_spacing: float = 1.6
 ):
     """
-    Draw critical path diagram with task boxes and arrows
+    Draw critical path diagram with horizontal layout
 
     Args:
         data: Critical path JSON data
         output_path: Output image file path
         path_id: Specific path ID to visualize (None = all paths)
-        figsize_width: Figure width
-        box_width: Width of task boxes
-        box_height: Height of task boxes
-        vertical_spacing: Vertical space between tasks
-        horizontal_spacing: Horizontal space between parallel paths
+        boxes_per_row: Maximum number of boxes per row (default: 20)
+        box_width: Width of task boxes (default: 2.8)
+        box_height: Height of task boxes (default: 1.0)
+        horizontal_spacing: Horizontal space between boxes (default: 3.2)
+        vertical_spacing: Vertical space between rows (default: 1.6)
     """
     project = data['project']
     summary = data['summary']
@@ -67,39 +68,6 @@ def draw_critical_path_diagram(
         if not critical_paths:
             raise ValueError(f"Path ID {path_id} not found")
 
-    # Calculate figure dimensions
-    max_activities = max(p['activity_count'] for p in critical_paths)
-    num_paths = len(critical_paths)
-
-    figsize_height = max(12, max_activities * vertical_spacing + 3)
-    fig_width = max(figsize_width, num_paths * horizontal_spacing + 2)
-
-    fig, ax = plt.subplots(figsize=(fig_width, figsize_height))
-    ax.set_xlim(0, fig_width)
-    ax.set_ylim(0, figsize_height)
-    ax.axis('off')
-
-    # Title
-    title = f"{project['project_name'] or project['project_code']}\nCritical Path Diagram"
-    if path_id:
-        title += f" - Path {path_id}"
-    plt.title(title, fontsize=16, fontweight='bold', pad=20)
-
-    # Summary text
-    summary_text = (
-        f"Duration: {summary['total_duration_days']:.1f} days "
-        f"({summary['total_duration_hours']:.0f} hours)\n"
-        f"Critical Paths: {summary['critical_path_count']} | "
-        f"Total Activities on Critical Paths: {summary['total_activities_on_critical_paths']}"
-    )
-    ax.text(
-        fig_width / 2, figsize_height - 1.5,
-        summary_text,
-        ha='center', va='top',
-        fontsize=10,
-        bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.3)
-    )
-
     # Color scheme
     colors = {
         'primary': '#4CAF50',      # Green
@@ -109,116 +77,195 @@ def draw_critical_path_diagram(
         'text': '#000000'          # Black
     }
 
-    # Draw each critical path
+    # Process each path
     for path_idx, path in enumerate(critical_paths):
         activities = path['activities']
         is_primary = path['is_primary']
-
-        # Determine box color
         box_color = colors['primary'] if is_primary else colors['alternate']
 
-        # Calculate x position for this path (center multiple paths)
-        if num_paths == 1:
-            x_base = fig_width / 2
-        else:
-            x_base = (path_idx + 1) * fig_width / (num_paths + 1)
+        # Calculate layout dimensions
+        num_activities = len(activities)
+        num_rows = (num_activities + boxes_per_row - 1) // boxes_per_row  # Ceiling division
 
-        # Path header
-        path_label = f"Path {path['path_id']}" + (" (Primary)" if is_primary else "")
-        path_info = f"{path['activity_count']} activities | {path['duration_days']:.1f} days"
+        # Figure dimensions
+        fig_width = max(30, boxes_per_row * horizontal_spacing + 2)
+        fig_height = max(8, num_rows * vertical_spacing + 5)
 
+        fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+        ax.set_xlim(0, fig_width)
+        ax.set_ylim(0, fig_height)
+        ax.axis('off')
+
+        # Title
+        title = f"{project['project_name'] or project['project_code']}\nCritical Path Diagram"
+        if path_id:
+            title += f" - Path {path_id}"
+        elif not is_primary:
+            title += f" - Path {path['path_id']}"
+        plt.title(title, fontsize=14, fontweight='bold', pad=15)
+
+        # Summary text
+        summary_text = (
+            f"Path {path['path_id']}" + (" (Primary)" if is_primary else "") +
+            f" | Duration: {path['duration_days']:.1f} days ({path['duration_hours']:.0f} hours) | "
+            f"Activities: {path['activity_count']}"
+        )
         ax.text(
-            x_base, figsize_height - 3,
-            f"{path_label}\n{path_info}",
+            fig_width / 2, fig_height - 1.5,
+            summary_text,
             ha='center', va='top',
-            fontsize=9, fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.3', facecolor=box_color, alpha=0.3)
+            fontsize=10,
+            bbox=dict(boxstyle='round,pad=0.5', facecolor=box_color, alpha=0.3)
         )
 
-        # Draw activities and arrows
-        y_start = figsize_height - 4.5
+        # Starting position (top-left corner)
+        margin_left = 1.5
+        margin_top = fig_height - 3.0
+        y_current = margin_top
 
+        # Draw activities
         for i, activity in enumerate(activities):
-            y_pos = y_start - (i * vertical_spacing)
+            # Calculate position (row and column)
+            row = i // boxes_per_row
+            col = i % boxes_per_row
+
+            # Calculate coordinates
+            x_pos = margin_left + col * horizontal_spacing
+            y_pos = margin_top - row * vertical_spacing
 
             # Draw task box
             box = FancyBboxPatch(
-                (x_base - box_width / 2, y_pos - box_height / 2),
+                (x_pos - box_width / 2, y_pos - box_height / 2),
                 box_width, box_height,
-                boxstyle="round,pad=0.1",
-                linewidth=2,
+                boxstyle="round,pad=0.08",
+                linewidth=1.5,
                 edgecolor=colors['box_edge'],
                 facecolor=box_color,
-                alpha=0.7
+                alpha=0.8
             )
             ax.add_patch(box)
 
-            # Task code (bold)
+            # Sequence number (small, in top-left corner)
             ax.text(
-                x_base, y_pos + 0.25,
-                activity['task_code'],
-                ha='center', va='center',
-                fontsize=9, fontweight='bold',
-                color=colors['text']
-            )
-
-            # Task name (wrapped)
-            task_name = wrap_text(activity['task_name'], width=35)
-            ax.text(
-                x_base, y_pos - 0.15,
-                task_name,
-                ha='center', va='center',
-                fontsize=7,
-                color=colors['text']
-            )
-
-            # Sequence number (small, in corner)
-            ax.text(
-                x_base - box_width / 2 + 0.15, y_pos + box_height / 2 - 0.15,
+                x_pos - box_width / 2 + 0.12, y_pos + box_height / 2 - 0.12,
                 str(activity['sequence']),
                 ha='left', va='top',
-                fontsize=8,
+                fontsize=7,
                 color='white',
                 fontweight='bold',
-                bbox=dict(boxstyle='circle,pad=0.1', facecolor=colors['box_edge'])
+                bbox=dict(boxstyle='circle,pad=0.05', facecolor=colors['box_edge'])
+            )
+
+            # Task code (bold, top)
+            ax.text(
+                x_pos, y_pos + 0.2,
+                activity['task_code'],
+                ha='center', va='center',
+                fontsize=7,
+                fontweight='bold',
+                color=colors['text']
+            )
+
+            # Task name (wrapped, bottom)
+            task_name = wrap_text(activity['task_name'], width=25)
+            ax.text(
+                x_pos, y_pos - 0.15,
+                task_name,
+                ha='center', va='center',
+                fontsize=5.5,
+                color=colors['text']
             )
 
             # Draw arrow to next task
             if i < len(activities) - 1:
-                arrow = FancyArrowPatch(
-                    (x_base, y_pos - box_height / 2 - 0.05),
-                    (x_base, y_pos - vertical_spacing + box_height / 2 + 0.05),
-                    arrowstyle='->,head_width=0.4,head_length=0.6',
-                    linewidth=2,
-                    color=colors['arrow'],
-                    zorder=1
-                )
-                ax.add_patch(arrow)
+                next_row = (i + 1) // boxes_per_row
+                next_col = (i + 1) % boxes_per_row
 
-    # Legend
-    legend_elements = [
-        mpatches.Patch(facecolor=colors['primary'], alpha=0.7, label='Primary Path'),
-        mpatches.Patch(facecolor=colors['alternate'], alpha=0.7, label='Alternate Path')
-    ]
-    ax.legend(
-        handles=legend_elements,
-        loc='lower right',
-        fontsize=9
-    )
+                next_x = margin_left + next_col * horizontal_spacing
+                next_y = margin_top - next_row * vertical_spacing
 
-    # Footer
-    ax.text(
-        fig_width / 2, 0.3,
-        f"Generated by XEReader | Project: {project['project_code']}",
-        ha='center', va='bottom',
-        fontsize=8,
-        style='italic',
-        color='gray'
-    )
+                # Check if we're wrapping to next row
+                if row == next_row:
+                    # Same row - horizontal arrow
+                    arrow = FancyArrowPatch(
+                        (x_pos + box_width / 2 + 0.05, y_pos),
+                        (next_x - box_width / 2 - 0.05, next_y),
+                        arrowstyle='->,head_width=0.3,head_length=0.4',
+                        linewidth=1.5,
+                        color=colors['arrow'],
+                        zorder=1
+                    )
+                    ax.add_patch(arrow)
+                else:
+                    # Wrapping to next row - route through the space between rows
+                    # Start from bottom of current box, end at top of next box
+                    start_x = x_pos
+                    start_y = y_pos - box_height / 2 - 0.05  # Bottom of current box
+                    end_x = next_x
+                    end_y = next_y + box_height / 2 + 0.05  # Top of next box
 
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f"✓ Diagram saved to: {output_path}")
+                    # Calculate midpoint in the vertical space between rows
+                    mid_y = (start_y + end_y) / 2
+
+                    # Three-segment path through the space between rows
+                    # Segment 1: go down from current box to middle space
+                    arrow1 = FancyArrowPatch(
+                        (start_x, start_y),
+                        (start_x, mid_y),
+                        arrowstyle='-',
+                        linewidth=1.5,
+                        color=colors['arrow'],
+                        zorder=1
+                    )
+                    ax.add_patch(arrow1)
+
+                    # Segment 2: go horizontally through the middle space
+                    arrow2 = FancyArrowPatch(
+                        (start_x, mid_y),
+                        (end_x, mid_y),
+                        arrowstyle='-',
+                        linewidth=1.5,
+                        color=colors['arrow'],
+                        zorder=1
+                    )
+                    ax.add_patch(arrow2)
+
+                    # Segment 3: go up to next box (with arrow head)
+                    arrow3 = FancyArrowPatch(
+                        (end_x, mid_y),
+                        (end_x, end_y),
+                        arrowstyle='->,head_width=0.3,head_length=0.4',
+                        linewidth=1.5,
+                        color=colors['arrow'],
+                        zorder=1
+                    )
+                    ax.add_patch(arrow3)
+
+        # Footer
+        ax.text(
+            fig_width / 2, 0.3,
+            f"Generated by XEReader | {boxes_per_row} activities per row",
+            ha='center', va='bottom',
+            fontsize=7,
+            style='italic',
+            color='gray'
+        )
+
+        plt.tight_layout()
+
+        # Generate output filename for this path
+        if len(critical_paths) > 1 and path_id is None:
+            # Multiple paths, save separately
+            output_file = Path(output_path)
+            path_output = output_file.parent / f"{output_file.stem}_path{path['path_id']}{output_file.suffix}"
+            plt.savefig(path_output, dpi=300, bbox_inches='tight', facecolor='white')
+            print(f"✓ Diagram saved to: {path_output}")
+        else:
+            # Single path or specific path requested
+            plt.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
+            print(f"✓ Diagram saved to: {output_path}")
+
+        plt.close()
 
     return output_path
 
@@ -226,14 +273,19 @@ def draw_critical_path_diagram(
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='Generate critical path diagram from JSON',
+        description='Generate critical path diagram from JSON (horizontal layout)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python visualize_critical_path.py critical_path.json
   python visualize_critical_path.py critical_path.json --output diagram.png
   python visualize_critical_path.py critical_path.json --path-id 1
-  python visualize_critical_path.py critical_path.json --width 30 --height 1.5
+  python visualize_critical_path.py critical_path.json --boxes-per-row 15
+
+Layout:
+  - Horizontal flow (left to right)
+  - Maximum 20 boxes per row by default
+  - Automatic wrapping to new rows with connector arrows
 
 Output:
   PNG image file with critical path diagram
@@ -257,44 +309,44 @@ Output:
     )
 
     parser.add_argument(
-        '--figsize-width',
+        '--boxes-per-row',
         type=int,
         default=20,
-        help='Figure width (default: 20)'
+        help='Maximum number of task boxes per row (default: 20)'
     )
 
     parser.add_argument(
         '--box-width',
         type=float,
-        default=3.5,
-        help='Task box width (default: 3.5)'
+        default=2.8,
+        help='Task box width (default: 2.8)'
     )
 
     parser.add_argument(
         '--box-height',
         type=float,
-        default=1.2,
-        help='Task box height (default: 1.2)'
-    )
-
-    parser.add_argument(
-        '--vertical-spacing',
-        type=float,
-        default=1.8,
-        help='Vertical spacing between tasks (default: 1.8)'
+        default=1.0,
+        help='Task box height (default: 1.0)'
     )
 
     parser.add_argument(
         '--horizontal-spacing',
         type=float,
-        default=4.5,
-        help='Horizontal spacing between paths (default: 4.5)'
+        default=3.2,
+        help='Horizontal spacing between boxes (default: 3.2)'
+    )
+
+    parser.add_argument(
+        '--vertical-spacing',
+        type=float,
+        default=1.6,
+        help='Vertical spacing between rows (default: 1.6)'
     )
 
     parser.add_argument(
         '--version',
         action='version',
-        version='Critical Path Visualizer 1.0.0'
+        version='Critical Path Visualizer 2.0.0'
     )
 
     return parser.parse_args()
@@ -336,6 +388,7 @@ def main():
         total_activities = sum(p['activity_count'] for p in data['critical_paths'])
 
         print(f"Found {num_paths} critical path(s) with {total_activities} total activities")
+        print(f"Layout: {args.boxes_per_row} boxes per row, horizontal flow with wrapping")
 
         if args.path_id:
             print(f"Visualizing path {args.path_id} only")
@@ -346,14 +399,17 @@ def main():
             data,
             str(output_path),
             path_id=args.path_id,
-            figsize_width=args.figsize_width,
+            boxes_per_row=args.boxes_per_row,
             box_width=args.box_width,
             box_height=args.box_height,
-            vertical_spacing=args.vertical_spacing,
-            horizontal_spacing=args.horizontal_spacing
+            horizontal_spacing=args.horizontal_spacing,
+            vertical_spacing=args.vertical_spacing
         )
 
-        print(f"Done! Open {output_path} to view the diagram.")
+        if num_paths > 1 and args.path_id is None:
+            print(f"\nNote: Multiple paths detected. Each path saved as a separate file.")
+
+        print(f"\nDone!")
 
         return 0
 
