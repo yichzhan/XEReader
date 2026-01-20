@@ -1,11 +1,14 @@
-# CLAUDE.md - XEReader Development Guide
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-XEReader is a Python application that parses Oracle Primavera P6 XER files and generates two JSON outputs:
+XEReader is a Python application that parses Oracle Primavera P6 XER files and generates JSON outputs plus visual diagrams:
 1. **activities.json** - All activities with dates and dependencies
 2. **critical_path.json** - Critical path sequence(s)
+3. **PNG diagrams** - Visual representation of critical paths (via visualize_critical_path.py)
 
-**Execution Model:** Direct Python script (run with `python xereader.py input.xer`)
+**Execution Model:** Direct Python scripts (no installation required)
 
 ---
 
@@ -17,13 +20,25 @@ XEReader is a Python application that parses Oracle Primavera P6 XER files and g
 pip install -r requirements.txt
 ```
 
-### Run
+### Run Parser
 ```bash
-# Basic usage
+# Basic usage - generates JSON files
 python xereader.py input.xer
 
 # With options
 python xereader.py input.xer --output-dir ./output --verbose
+```
+
+### Generate Visualizations
+```bash
+# Generate diagram from critical path JSON
+python visualize_critical_path.py project_critical_path.json
+
+# Visualize specific path only
+python visualize_critical_path.py project_critical_path.json --path-id 1
+
+# Customize layout (20 boxes per row by default)
+python visualize_critical_path.py project_critical_path.json --boxes-per-row 15
 ```
 
 ### Run Tests
@@ -44,17 +59,17 @@ pytest tests/test_parser.py
 
 ```
 XEReader/
-├── xereader.py              # Main entry point
-├── requirements.txt         # Dependencies
-├── src/                     # Source code
-│   ├── parser/             # XER file parsing
-│   ├── models/             # Data models
-│   ├── processors/         # Business logic
-│   ├── exporters/          # JSON generation
-│   └── utils/              # Utilities
-├── tests/                   # Test suite
-├── examples/                # Sample outputs
-└── docs/                    # Design documents
+├── xereader.py                    # Main entry point - XER parser
+├── visualize_critical_path.py    # Critical path diagram generator
+├── requirements.txt               # Dependencies
+├── src/                           # Source code
+│   ├── parser/                   # XER file parsing
+│   ├── models/                   # Data models
+│   ├── processors/               # Business logic (CPM algorithm)
+│   ├── exporters/                # JSON generation
+│   └── utils/                    # Utilities
+├── tests/                         # Test suite
+└── WORKFLOW.md                    # Complete workflow guide
 ```
 
 ---
@@ -63,9 +78,10 @@ XEReader/
 
 ### Data Flow
 ```
-XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter
-                         ↓
-                    Dependencies
+XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter → Visualization
+                         ↓                                      ↓              ↓
+                    Dependencies                          activities.json  PNG diagrams
+                                                         critical_path.json
 ```
 
 ### Key Components
@@ -92,12 +108,19 @@ XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter
    - Generates critical_path.json
    - Ensures schema compliance
 
+5. **Visualization Tool** (`visualize_critical_path.py`)
+   - Reads critical_path.json
+   - Generates PNG diagrams with matplotlib
+   - Horizontal layout with 20 boxes per row (configurable)
+   - Three-segment wrapping arrows for row transitions
+   - Separate diagrams for multiple critical paths
+
 ---
 
 ## Key Design Decisions
 
 1. **Use `task_code` not `task_id`**
-   - `task_code` is persistent across exports
+   - `task_code` is persistent across exports (Activity ID)
    - `task_id` only used internally during parsing
 
 2. **Two separate JSON files**
@@ -106,13 +129,18 @@ XER File → Parser → Activity Objects → CPM Calculator → JSON Exporter
 
 3. **Critical path = longest path**
    - Not just zero float activities
-   - Proper CPM definition
+   - Proper CPM definition using NetworkX
 
-4. **Direct Python execution**
-   - No pip install needed
-   - Simple distribution
+4. **Output file naming convention**
+   - `{filename}_activities.json` - uses input XER filename without .xer extension
+   - `{filename}_critical_path.json`
+   - `{filename}_critical_path_path{N}.png` - separate file per critical path
 
-See [design_decisions.md](design_decisions.md) for full details.
+5. **Horizontal diagram layout**
+   - Left-to-right flow (not vertical)
+   - Grid-based positioning with automatic wrapping
+   - Wrapping arrows route through space between rows
+   - Default 20 boxes per row (configurable)
 
 ---
 
@@ -160,6 +188,12 @@ See [design_decisions.md](design_decisions.md) for full details.
 3. Update tests and examples
 4. Document in design_decisions.md
 
+### Modify Visualization Layout
+1. Update `draw_critical_path_diagram()` in visualize_critical_path.py
+2. Key parameters: `boxes_per_row`, `box_width`, `box_height`, `horizontal_spacing`, `vertical_spacing`
+3. Arrow logic: same-row arrows vs wrapping arrows (three-segment path)
+4. Test with real data to ensure readability
+
 ---
 
 ## Debugging Tips
@@ -188,6 +222,7 @@ See [design_decisions.md](design_decisions.md) for full details.
 ### Required
 - **networkx** - Graph algorithms for CPM
 - **python-dateutil** - Date parsing
+- **matplotlib** - Diagram generation (PNG output)
 
 ### Development
 - **pytest** - Testing framework
@@ -197,25 +232,13 @@ See [design_decisions.md](design_decisions.md) for full details.
 
 ## Related Documentation
 
-- [technical_design.md](technical_design.md) - System architecture
+- [README.md](README.md) - User guide and API reference
+- [WORKFLOW.md](WORKFLOW.md) - Complete workflow from XER to diagram
 - [design_decisions.md](design_decisions.md) - Design rationale
 - [activities_json_schema.md](activities_json_schema.md) - activities.json spec
 - [critical_path_json_schema.md](critical_path_json_schema.md) - critical_path.json spec
-- [implementation_plan.md](implementation_plan.md) - Development phases
 
 ---
 
-## Future Enhancements
-
-Potential features for future versions:
-- WBS hierarchy support
-- Calendar integration
-- Resource assignments
-- Visualization/diagrams
-- Web interface
-- Database output
-
----
-
-**Version:** 1.0
-**Last Updated:** 2026-01-20
+**Version:** 2.0
+**Last Updated:** 2026-01-21
