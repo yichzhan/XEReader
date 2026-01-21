@@ -33,6 +33,7 @@ class ActivityProcessor:
         return ProjectInfo(
             project_code=project_row.get('proj_short_name', ''),
             project_name=project_row.get('proj_name', ''),
+            last_recalc_date=project_row.get('last_recalc_date', ''),
             project_id=int(project_row['proj_id']) if project_row.get('proj_id') else None
         )
 

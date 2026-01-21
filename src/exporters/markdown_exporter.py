@@ -27,7 +27,8 @@ class MarkdownExporter:
         if hasattr(project_info, 'project_code') and hasattr(project_info, 'project_name'):
             self.project_info = {
                 'project_code': project_info.project_code,
-                'project_name': project_info.project_name
+                'project_name': project_info.project_name,
+                'last_recalc_date': getattr(project_info, 'last_recalc_date', '')
             }
         else:
             self.project_info = project_info
@@ -108,6 +109,12 @@ class MarkdownExporter:
         lines.append("# Project Activities Report\n")
         lines.append(f"**{project_name}** ({project_code})\n")
         lines.append(f"This report contains {len(self.activities)} activities for the project.\n")
+
+        # XER file date (if available)
+        xer_date = self.project_info.get('last_recalc_date', '')
+        if xer_date:
+            lines.append(f"XER file date: {xer_date}\n")
+
         lines.append(f"Report generated on {timestamp}.\n")
         lines.append("---\n")
 
@@ -120,8 +127,7 @@ class MarkdownExporter:
 
             lines.append(f"### {idx}. {task_code} - {task_name}\n")
 
-            # Planned schedule
-            lines.append("**Planned Schedule:**\n")
+            # Planned and actual schedule
             planned_start = self._format_date(activity.get('planned_start_date'))
             planned_end = self._format_date(activity.get('planned_end_date'))
             duration = self._calculate_duration(
@@ -129,37 +135,30 @@ class MarkdownExporter:
                 activity.get('planned_end_date')
             )
 
-            lines.append(f"- Start: {planned_start}\n")
-            lines.append(f"- End: {planned_end}\n")
-            lines.append(f"- Duration: {duration}\n")
+            lines.append(f"- Planned: {planned_start} to {planned_end} ({duration})\n")
 
             # Actual progress
-            lines.append("\n**Actual Progress:**\n")
             actual_start = activity.get('actual_start_date')
             actual_end = activity.get('actual_end_date')
 
             if actual_start and actual_end:
-                lines.append(f"- Started: {self._format_date(actual_start)}\n")
-                lines.append(f"- Completed: {self._format_date(actual_end)}\n")
-                lines.append("- Status: Completed\n")
+                lines.append(f"- Actual: {self._format_date(actual_start)} to {self._format_date(actual_end)} (Completed)\n")
             elif actual_start:
-                lines.append(f"- Started: {self._format_date(actual_start)}\n")
-                lines.append("- Status: In Progress\n")
+                lines.append(f"- Actual: In Progress (started {self._format_date(actual_start)})\n")
             else:
-                lines.append("- Not yet started\n")
+                lines.append("- Actual: Not started\n")
 
             # Dependencies
             deps = activity.get('dependencies', {})
-            lines.append("\n**Dependencies:**\n")
-
             preds = deps.get('predecessors', [])
+            succs = deps.get('successors', [])
+
             if preds:
                 pred_strs = [self._format_dependency(p) for p in preds]
                 lines.append(f"- Predecessors: {', '.join(pred_strs)}\n")
             else:
                 lines.append("- Predecessors: None\n")
 
-            succs = deps.get('successors', [])
             if succs:
                 succ_strs = [self._format_dependency(s) for s in succs]
                 lines.append(f"- Successors: {', '.join(succ_strs)}\n")
@@ -198,6 +197,12 @@ class MarkdownExporter:
 
         lines.append("# Critical Path Analysis Report\n")
         lines.append(f"**{project_name}** ({project_code})\n")
+
+        # XER file date (if available)
+        xer_date = self.project_info.get('last_recalc_date', '')
+        if xer_date:
+            lines.append(f"XER file date: {xer_date}\n")
+
         lines.append(f"Analysis performed on {timestamp}.\n")
         lines.append("---\n")
 
