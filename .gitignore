@@ -42,6 +42,9 @@ htmlcov/
 *_output/
 *.png
 
+# Sample XER files (user data)
+*.xer
+
 # OS
 .DS_Store
 Thumbs.db
