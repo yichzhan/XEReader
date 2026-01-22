@@ -161,7 +161,9 @@ class ActivityProcessor:
             if not task_id or not pred_task_id:
                 return None
 
-            lag_hr_cnt = float(row.get('lag_hr_cnt', 0))
+            # Handle None values for lag_hr_cnt
+            lag_value = row.get('lag_hr_cnt', 0)
+            lag_hr_cnt = float(lag_value) if lag_value is not None else 0.0
             pred_type = row.get('pred_type', 'PR_FS')
 
             return DependencyRelation(
