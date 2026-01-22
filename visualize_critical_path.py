@@ -39,7 +39,7 @@ def draw_critical_path_diagram(
     data: dict,
     output_path: str,
     path_id: int = None,
-    boxes_per_row: int = 20,
+    boxes_per_row: int = 10,
     box_width: float = 2.8,
     box_height: float = 1.0,
     horizontal_spacing: float = 3.2,
@@ -284,7 +284,7 @@ Examples:
 
 Layout:
   - Horizontal flow (left to right)
-  - Maximum 20 boxes per row by default
+  - Maximum 10 boxes per row by default
   - Automatic wrapping to new rows with connector arrows
 
 Output:
@@ -311,8 +311,8 @@ Output:
     parser.add_argument(
         '--boxes-per-row',
         type=int,
-        default=20,
-        help='Maximum number of task boxes per row (default: 20)'
+        default=10,
+        help='Maximum number of task boxes per row (default: 10)'
     )
 
     parser.add_argument(
