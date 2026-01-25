@@ -1,9 +1,25 @@
 """Activity processor - converts XER data to Activity objects"""
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 from ..models.activity import Activity
 from ..models.dependency import Dependency, DependencyRelation
 from ..models.project import ProjectInfo
 from ..utils.date_utils import parse_xer_date
+
+
+@dataclass
+class DuplicateInfo:
+    """Information about a discarded duplicate task"""
+    task_code: str
+    task_id: Optional[int]
+    task_name: str
+    planned_start_date: Optional[datetime]
+    planned_end_date: Optional[datetime]
+    actual_start_date: Optional[datetime]
+    actual_end_date: Optional[datetime]
+    is_identical: bool  # True if all fields match the kept task
+    differences: List[str]  # List of field names that differ
 
 
 class ActivityProcessor:
@@ -182,3 +198,78 @@ class ActivityProcessor:
     def get_activity_by_code(self, task_code: str) -> Activity:
         """Get activity by task code"""
         return self.task_code_to_activity.get(task_code)
+
+    def deduplicate_activities(self) -> Tuple[List[Activity], Dict[str, List[DuplicateInfo]]]:
+        """
+        Remove duplicate task_codes, keeping first occurrence.
+
+        Returns:
+            Tuple of:
+            - List of deduplicated activities
+            - Dict mapping task_code to list of discarded DuplicateInfo
+        """
+        seen_codes: Dict[str, Activity] = {}
+        deduplicated: List[Activity] = []
+        discarded: Dict[str, List[DuplicateInfo]] = {}
+
+        for activity in self.activities:
+            if activity.task_code not in seen_codes:
+                # First occurrence - keep it
+                seen_codes[activity.task_code] = activity
+                deduplicated.append(activity)
+            else:
+                # Duplicate - record info and discard
+                kept = seen_codes[activity.task_code]
+                differences = self._compare_activities(kept, activity)
+
+                dup_info = DuplicateInfo(
+                    task_code=activity.task_code,
+                    task_id=activity.task_id,
+                    task_name=activity.task_name,
+                    planned_start_date=activity.planned_start_date,
+                    planned_end_date=activity.planned_end_date,
+                    actual_start_date=activity.actual_start_date,
+                    actual_end_date=activity.actual_end_date,
+                    is_identical=len(differences) == 0,
+                    differences=differences
+                )
+
+                if activity.task_code not in discarded:
+                    discarded[activity.task_code] = []
+                discarded[activity.task_code].append(dup_info)
+
+                # Remove from lookup maps
+                if activity.task_id and activity.task_id in self.task_id_to_code:
+                    del self.task_id_to_code[activity.task_id]
+
+        # Update internal state
+        self.activities = deduplicated
+        self.task_code_to_activity = {a.task_code: a for a in deduplicated}
+
+        return deduplicated, discarded
+
+    def _compare_activities(self, kept: Activity, other: Activity) -> List[str]:
+        """
+        Compare two activities and return list of differing fields.
+
+        Args:
+            kept: The activity being kept
+            other: The duplicate activity being discarded
+
+        Returns:
+            List of field names that differ (empty if identical)
+        """
+        differences = []
+
+        if kept.task_name != other.task_name:
+            differences.append('task_name')
+        if kept.planned_start_date != other.planned_start_date:
+            differences.append('planned_start_date')
+        if kept.planned_end_date != other.planned_end_date:
+            differences.append('planned_end_date')
+        if kept.actual_start_date != other.actual_start_date:
+            differences.append('actual_start_date')
+        if kept.actual_end_date != other.actual_end_date:
+            differences.append('actual_end_date')
+
+        return differences

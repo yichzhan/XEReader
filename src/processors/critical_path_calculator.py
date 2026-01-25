@@ -1,8 +1,18 @@
 """Critical Path Method (CPM) calculator"""
-from typing import List, Dict, Tuple, Set
+from dataclasses import dataclass
+from typing import List, Dict, Tuple, Set, Optional
 from datetime import datetime, timedelta
 import networkx as nx
 from ..models.activity import Activity
+
+
+@dataclass
+class CycleInfo:
+    """Information about a cycle in the dependency graph"""
+    cycle_id: int
+    task_codes: List[str]  # Task codes in the cycle
+    task_names: List[str]  # Task names in the cycle
+    length: int
 
 
 class CriticalPathCalculator:
@@ -29,6 +39,53 @@ class CriticalPathCalculator:
             a.task_code: a for a in activities
         }
 
+    def detect_cycles(self) -> List[CycleInfo]:
+        """
+        Detect cycles in the dependency graph.
+
+        Must be called after _build_graph().
+
+        Returns:
+            List of CycleInfo objects describing each cycle found
+        """
+        cycles = []
+        try:
+            raw_cycles = list(nx.simple_cycles(self.graph))
+            for i, cycle in enumerate(raw_cycles):
+                task_names = []
+                for code in cycle:
+                    activity = self.task_code_to_activity.get(code)
+                    if activity:
+                        task_names.append(activity.task_name or '(no name)')
+                    else:
+                        task_names.append('(unknown)')
+
+                cycles.append(CycleInfo(
+                    cycle_id=i + 1,
+                    task_codes=cycle,
+                    task_names=task_names,
+                    length=len(cycle)
+                ))
+        except Exception:
+            pass
+
+        return cycles
+
+    def has_cycles(self) -> bool:
+        """
+        Check if the graph has any cycles.
+
+        Must be called after _build_graph().
+
+        Returns:
+            True if cycles exist, False otherwise
+        """
+        try:
+            nx.find_cycle(self.graph)
+            return True
+        except nx.NetworkXNoCycle:
+            return False
+
     def calculate(self) -> Tuple[List[List[Activity]], float]:
         """
         Calculate critical path(s)
@@ -36,9 +93,16 @@ class CriticalPathCalculator:
         Returns:
             Tuple of (list of critical paths, project duration in hours)
             Each critical path is a list of Activity objects in sequence
+
+        Raises:
+            ValueError: If the graph contains cycles
         """
         # Build network graph
         self._build_graph()
+
+        # Check for cycles before proceeding
+        if self.has_cycles():
+            raise ValueError("Graph contains cycles - cannot calculate critical path")
 
         # Perform CPM calculations
         self._forward_pass()
@@ -58,6 +122,10 @@ class CriticalPathCalculator:
         project_duration = self._calculate_project_duration()
 
         return critical_paths, project_duration
+
+    def build_graph_only(self) -> None:
+        """Build the graph without calculating critical path (for cycle detection)"""
+        self._build_graph()
 
     def _build_graph(self) -> None:
         """Build directed graph from activities and dependencies"""

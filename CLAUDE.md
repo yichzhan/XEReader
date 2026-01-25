@@ -35,6 +35,12 @@ python xereader.py input.xer --format both
 
 # With options
 python xereader.py input.xer --output-dir ./output --verbose
+
+# Handle multi-project XER files (removes duplicate task codes)
+python xereader.py input.xer --deduplicate
+
+# Skip duplicate validation (warn instead of fail)
+python xereader.py input.xer --skip-duplicate-validation
 ```
 
 ### Generate Visualizations
@@ -45,7 +51,7 @@ python visualize_critical_path.py project_critical_path.json
 # Visualize specific path only
 python visualize_critical_path.py project_critical_path.json --path-id 1
 
-# Customize layout (20 boxes per row by default)
+# Customize layout (10 boxes per row by default)
 python visualize_critical_path.py project_critical_path.json --boxes-per-row 15
 ```
 
@@ -104,9 +110,11 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
    - Builds task_id → task_code lookup map
    - Resolves dependencies (predecessors + successors)
    - Converts task_id references to task_code
+   - `deduplicate_activities()` - Removes duplicate task_codes, tracks discarded info
 
 3. **Critical Path Calculator** (`src/processors/critical_path_calculator.py`)
    - Builds network graph (NetworkX)
+   - `detect_cycles()` / `has_cycles()` - Cycle detection before CPM
    - Performs CPM forward/backward pass
    - Calculates total float
    - Identifies longest path(s)
@@ -122,7 +130,7 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
 5. **Visualization Tool** (`visualize_critical_path.py`)
    - Reads critical_path.json
    - Generates PNG diagrams with matplotlib
-   - Horizontal layout with 20 boxes per row (configurable)
+   - Horizontal layout with 10 boxes per row (configurable)
    - Three-segment wrapping arrows for row transitions
    - Separate diagrams for multiple critical paths
 
@@ -146,6 +154,8 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
    - `{filename}_activities.json` / `{filename}_activities.md` - uses input XER filename without .xer extension
    - `{filename}_critical_path.json` / `{filename}_critical_path.md`
    - `{filename}_critical_path_path{N}.png` - separate file per critical path
+   - `{filename}_duplicates.log` - discarded duplicate tasks (when --deduplicate used)
+   - `{filename}_cycles.log` - circular dependencies (when cycles detected)
 
 5. **Multiple output formats**
    - JSON for programmatic use (default)
@@ -157,31 +167,19 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
    - Left-to-right flow (not vertical)
    - Grid-based positioning with automatic wrapping
    - Wrapping arrows route through space between rows
-   - Default 20 boxes per row (configurable)
+   - Default 10 boxes per row (configurable)
 
----
+7. **Multi-project XER handling**
+   - XER files can contain multiple projects with duplicate task_codes
+   - `--deduplicate` flag removes duplicates (keeps first occurrence)
+   - Generates `{filename}_duplicates.log` with details of discarded tasks
+   - Compares task_name, dates to mark as IDENTICAL or DIFFERENT
 
-## Development Workflow
-
-### Adding a New Feature
-1. Update relevant design documents
-2. Write tests first (TDD)
-3. Implement feature
-4. Update documentation
-5. Run full test suite
-
-### Code Style
-- Python 3.10+
-- Use type hints
-- Follow PEP 8
-- Use dataclasses for models
-- Document complex logic
-
-### Testing
-- Unit tests for all modules
-- Integration tests for full flow
-- Test fixtures in `tests/fixtures/`
-- Aim for >80% coverage
+8. **Circular dependency handling**
+   - Cycles in dependency graph prevent CPM calculation
+   - Automatic cycle detection before CPM
+   - Generates `{filename}_cycles.log` with cycle details
+   - Activities export still works; critical path is skipped
 
 ---
 
@@ -266,5 +264,5 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
 
 ---
 
-**Version:** 2.1
-**Last Updated:** 2026-01-21
+**Version:** 2.4
+**Last Updated:** 2026-01-26

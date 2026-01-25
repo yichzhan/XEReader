@@ -8,16 +8,24 @@ class ValidationError(Exception):
     pass
 
 
-def validate_activities(activities: List[Activity]) -> None:
+def validate_activities(activities: List[Activity], strict: bool = True) -> List[str]:
     """
     Validate activities data
 
     Args:
         activities: List of Activity objects
+        strict: If True, raise ValidationError on duplicate task codes.
+                If False, return warnings instead.
+
+    Returns:
+        List of warning messages (empty if no issues or strict=True)
 
     Raises:
-        ValidationError: If validation fails
+        ValidationError: If validation fails (always for missing activities,
+                        only for duplicates if strict=True)
     """
+    warnings = []
+
     if not activities:
         raise ValidationError("No activities found")
 
@@ -25,12 +33,18 @@ def validate_activities(activities: List[Activity]) -> None:
     task_codes = [a.task_code for a in activities]
     duplicates = [code for code in task_codes if task_codes.count(code) > 1]
     if duplicates:
-        raise ValidationError(f"Duplicate task codes found: {set(duplicates)}")
+        msg = f"Duplicate task codes found: {set(duplicates)}"
+        if strict:
+            raise ValidationError(msg)
+        else:
+            warnings.append(msg)
 
     # Validate each activity
     task_code_set = set(task_codes)
     for activity in activities:
         validate_activity(activity, task_code_set)
+
+    return warnings
 
 
 def validate_activity(activity: Activity, all_task_codes: Set[str]) -> None:
