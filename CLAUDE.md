@@ -3,11 +3,11 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-XEReader is a Python application that parses Oracle Primavera P6 XER files and generates multiple output formats:
-1. **activities.json** - All activities with dates and dependencies
-2. **critical_path.json** - Critical path sequence(s)
-3. **activities.md** - Human-readable Markdown report of all activities
-4. **critical_path.md** - Natural language critical path analysis report
+XEReader is a Python application that parses Oracle Primavera P6 XER files and generates separate output files per project:
+1. **{xer}_{project_code}_activities.json** - All activities with dates and dependencies
+2. **{xer}_{project_code}_critical_path.json** - Critical path sequence(s)
+3. **{xer}_{project_code}_activities.md** - Human-readable Markdown report of all activities
+4. **{xer}_{project_code}_critical_path.md** - Natural language critical path analysis report
 5. **PNG diagrams** - Visual representation of critical paths (via visualize_critical_path.py)
 
 **Execution Model:** Direct Python scripts (no installation required)
@@ -25,6 +25,7 @@ pip install -r requirements.txt
 ### Run Parser
 ```bash
 # Basic usage - generates JSON files (default)
+# Multi-project XER files automatically generate separate files per project
 python xereader.py input.xer
 
 # Generate Markdown reports instead
@@ -35,12 +36,6 @@ python xereader.py input.xer --format both
 
 # With options
 python xereader.py input.xer --output-dir ./output --verbose
-
-# Handle multi-project XER files (removes duplicate task codes)
-python xereader.py input.xer --deduplicate
-
-# Skip duplicate validation (warn instead of fail)
-python xereader.py input.xer --skip-duplicate-validation
 ```
 
 ### Generate Visualizations
@@ -92,10 +87,10 @@ XEReader/
 
 ### Data Flow
 ```
-XER File → Parser → Activity Objects → CPM Calculator → Exporters → Outputs
-                         ↓                                   ↓
-                    Dependencies                    JSON / Markdown / PNG
-                                                   (selectable via --format)
+XER File → Parser → Activity Objects → Group by Project → CPM Calculator → Exporters
+                         ↓                    ↓                              ↓
+                    Dependencies        Per-Project         JSON / Markdown / PNG
+                  (within-project)      Processing         (separate files per project)
 ```
 
 ### Key Components
@@ -107,10 +102,12 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
 
 2. **Activity Processor** (`src/processors/activity_processor.py`)
    - Converts TASK rows to Activity objects
+   - Stores `proj_id` for each activity
    - Builds task_id → task_code lookup map
-   - Resolves dependencies (predecessors + successors)
-   - Converts task_id references to task_code
-   - `deduplicate_activities()` - Removes duplicate task_codes, tracks discarded info
+   - `process_all_projects()` - Returns all ProjectInfo objects
+   - `group_by_project()` - Groups activities by project ID
+   - `get_activities_for_project(proj_id)` - Returns activities for specific project
+   - Resolves dependencies (only within-project links)
 
 3. **Critical Path Calculator** (`src/processors/critical_path_calculator.py`)
    - Builds network graph (NetworkX)
@@ -142,20 +139,21 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
    - `task_code` is persistent across exports (Activity ID)
    - `task_id` only used internally during parsing
 
-2. **Two separate JSON files**
-   - Separation of concerns
-   - Smaller file sizes
+2. **Separate output files per project**
+   - XER files can contain multiple projects
+   - Each project gets its own output files
+   - `proj_short_name` (project_code) is unique in P6 database
+   - Dependencies only link activities within the same project
 
 3. **Critical path = longest path**
    - Not just zero float activities
    - Proper CPM definition using NetworkX
 
 4. **Output file naming convention**
-   - `{filename}_activities.json` / `{filename}_activities.md` - uses input XER filename without .xer extension
-   - `{filename}_critical_path.json` / `{filename}_critical_path.md`
-   - `{filename}_critical_path_path{N}.png` - separate file per critical path
-   - `{filename}_duplicates.log` - discarded duplicate tasks (when --deduplicate used)
-   - `{filename}_cycles.log` - circular dependencies (when cycles detected)
+   - `{xer_filename}_{project_code}_activities.json/md`
+   - `{xer_filename}_{project_code}_critical_path.json/md`
+   - `{xer_filename}_{project_code}_critical_path_path{N}.png`
+   - `{xer_filename}_{project_code}_cycles.log` - circular dependencies (when detected)
 
 5. **Multiple output formats**
    - JSON for programmatic use (default)
@@ -169,16 +167,15 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
    - Wrapping arrows route through space between rows
    - Default 10 boxes per row (configurable)
 
-7. **Multi-project XER handling**
-   - XER files can contain multiple projects with duplicate task_codes
-   - `--deduplicate` flag removes duplicates (keeps first occurrence)
-   - Generates `{filename}_duplicates.log` with details of discarded tasks
-   - Compares task_name, dates to mark as IDENTICAL or DIFFERENT
+7. **Within-project dependencies only**
+   - Cross-project dependencies are ignored
+   - Each project has independent dependency graph
+   - Prevents cycles caused by cross-project links
 
 8. **Circular dependency handling**
    - Cycles in dependency graph prevent CPM calculation
-   - Automatic cycle detection before CPM
-   - Generates `{filename}_cycles.log` with cycle details
+   - Automatic cycle detection before CPM (per project)
+   - Generates `{xer}_{project}_cycles.log` with cycle details
    - Activities export still works; critical path is skipped
 
 ---
@@ -228,7 +225,7 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
 
 ### Critical Path Issues
 - Verify graph connectivity
-- Check for circular dependencies
+- Check for circular dependencies (per project)
 - Ensure float calculations are correct
 - Validate forward/backward pass
 
@@ -264,5 +261,5 @@ XER File → Parser → Activity Objects → CPM Calculator → Exporters → Ou
 
 ---
 
-**Version:** 2.4
+**Version:** 3.0
 **Last Updated:** 2026-01-26

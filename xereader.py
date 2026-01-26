@@ -2,9 +2,9 @@
 """
 XEReader - Primavera P6 XER File Parser
 
-Parses XER files and generates two JSON outputs:
-- activities.json: All activities with dates and dependencies
-- critical_path.json: Critical path sequence(s)
+Parses XER files and generates separate output files per project:
+- {xer_filename}_{project_code}_activities.json/md: All activities with dates and dependencies
+- {xer_filename}_{project_code}_critical_path.json/md: Critical path sequence(s)
 
 Usage:
     python xereader.py input.xer
@@ -33,17 +33,17 @@ from src.utils.validators import validate_required_tables, validate_activities, 
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description='XEReader - Parse Primavera P6 XER files to JSON',
+        description='XEReader - Parse Primavera P6 XER files to JSON/Markdown',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python xereader.py project.xer
   python xereader.py project.xer --output-dir ./output
-  python xereader.py project.xer --verbose
+  python xereader.py project.xer --format both --verbose
 
-Output:
-  activities.json      - All activities with dependencies
-  critical_path.json   - Critical path sequence(s)
+Output (per project in the XER file):
+  {xer_filename}_{project_code}_activities.json/md   - All activities with dependencies
+  {xer_filename}_{project_code}_critical_path.json/md - Critical path sequence(s)
         """
     )
 
@@ -84,21 +84,9 @@ Output:
     )
 
     parser.add_argument(
-        '--skip-duplicate-validation',
-        action='store_true',
-        help='Skip validation for duplicate task codes (for multi-project XER files)'
-    )
-
-    parser.add_argument(
-        '--deduplicate',
-        action='store_true',
-        help='Remove duplicate task codes (keeps first, logs discarded to _duplicates.log)'
-    )
-
-    parser.add_argument(
         '--version',
         action='version',
-        version='XEReader 1.0.0'
+        version='XEReader 2.0.0'
     )
 
     return parser.parse_args()
@@ -120,94 +108,25 @@ def log_warning(message: str):
     print(f"WARNING: {message}", file=sys.stderr)
 
 
-def write_duplicates_log(log_path: Path, discarded: Dict, activities: List) -> None:
-    """
-    Write duplicates report to log file.
-
-    Args:
-        log_path: Path to the log file
-        discarded: Dict mapping task_code to list of DuplicateInfo
-        activities: List of kept activities (to get info about kept task)
-    """
-    from src.processors.activity_processor import DuplicateInfo
-
-    # Build lookup for kept activities
-    kept_lookup = {a.task_code: a for a in activities}
-
-    def format_date(dt):
-        return dt.strftime('%Y-%m-%d %H:%M') if dt else 'None'
-
-    with open(log_path, 'w', encoding='utf-8') as f:
-        f.write("=" * 60 + "\n")
-        f.write("DUPLICATE TASK CODES REPORT\n")
-        f.write("=" * 60 + "\n")
-        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Total duplicate task codes: {len(discarded)}\n")
-        total_discarded = sum(len(dups) for dups in discarded.values())
-        f.write(f"Total discarded tasks: {total_discarded}\n")
-        f.write("\n")
-
-        for task_code, dup_list in sorted(discarded.items()):
-            kept = kept_lookup.get(task_code)
-            all_identical = all(d.is_identical for d in dup_list)
-
-            status = "IDENTICAL" if all_identical else "DIFFERENT"
-            f.write("-" * 60 + "\n")
-            f.write(f"## {task_code} ({len(dup_list) + 1} occurrences - {status})\n")
-            f.write("-" * 60 + "\n")
-
-            # Show kept task
-            if kept:
-                f.write(f"\nKEPT: task_id={kept.task_id}\n")
-                f.write(f"  task_name:          {kept.task_name}\n")
-                f.write(f"  planned_start_date: {format_date(kept.planned_start_date)}\n")
-                f.write(f"  planned_end_date:   {format_date(kept.planned_end_date)}\n")
-                f.write(f"  actual_start_date:  {format_date(kept.actual_start_date)}\n")
-                f.write(f"  actual_end_date:    {format_date(kept.actual_end_date)}\n")
-
-            # Show discarded tasks
-            for dup in dup_list:
-                f.write(f"\nDISCARDED: task_id={dup.task_id}\n")
-                if dup.is_identical:
-                    f.write("  (All fields identical to kept task)\n")
-                else:
-                    # Show all fields, marking differences
-                    name_mark = " [DIFFERS]" if 'task_name' in dup.differences else ""
-                    f.write(f"  task_name:          {dup.task_name}{name_mark}\n")
-
-                    start_mark = " [DIFFERS]" if 'planned_start_date' in dup.differences else ""
-                    f.write(f"  planned_start_date: {format_date(dup.planned_start_date)}{start_mark}\n")
-
-                    end_mark = " [DIFFERS]" if 'planned_end_date' in dup.differences else ""
-                    f.write(f"  planned_end_date:   {format_date(dup.planned_end_date)}{end_mark}\n")
-
-                    act_start_mark = " [DIFFERS]" if 'actual_start_date' in dup.differences else ""
-                    f.write(f"  actual_start_date:  {format_date(dup.actual_start_date)}{act_start_mark}\n")
-
-                    act_end_mark = " [DIFFERS]" if 'actual_end_date' in dup.differences else ""
-                    f.write(f"  actual_end_date:    {format_date(dup.actual_end_date)}{act_end_mark}\n")
-
-            f.write("\n")
-
-
-def write_cycles_log(log_path: Path, cycles: List) -> None:
+def write_cycles_log(log_path: Path, cycles: List, project_code: str) -> None:
     """
     Write cycles report to log file.
 
     Args:
         log_path: Path to the log file
         cycles: List of CycleInfo objects
+        project_code: Project code for the header
     """
     with open(log_path, 'w', encoding='utf-8') as f:
         f.write("=" * 60 + "\n")
-        f.write("CIRCULAR DEPENDENCIES REPORT\n")
+        f.write(f"CIRCULAR DEPENDENCIES REPORT - {project_code}\n")
         f.write("=" * 60 + "\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Total cycles found: {len(cycles)}\n")
         f.write("\n")
         f.write("NOTE: Circular dependencies prevent Critical Path Method (CPM)\n")
-        f.write("calculation. The activities.json file can still be exported,\n")
-        f.write("but critical_path.json will not be generated.\n")
+        f.write("calculation. The activities file can still be exported,\n")
+        f.write("but critical_path file will not be generated.\n")
         f.write("\n")
 
         # Sort by length (shortest first)
@@ -232,6 +151,117 @@ def write_cycles_log(log_path: Path, cycles: List) -> None:
             f.write("\n")
 
 
+def process_single_project(project_info, activities, output_dir, base_filename, args, output_files):
+    """
+    Process a single project and generate output files.
+
+    Args:
+        project_info: ProjectInfo object
+        activities: List of Activity objects for this project
+        output_dir: Output directory Path
+        base_filename: Base filename from input XER
+        args: Command line arguments
+        output_files: List to append output file info to
+
+    Returns:
+        True if successful, False if validation failed
+    """
+    project_code = project_info.project_code
+
+    log(f"\n--- Processing project: {project_info.project_name} ({project_code}) ---",
+        args.verbose, args.quiet)
+    log(f"  Activities: {len(activities)}", args.verbose, args.quiet)
+
+    # Count dependencies
+    total_deps = sum(len(a.predecessors) for a in activities)
+    log(f"  Dependencies: {total_deps}", args.verbose, args.quiet)
+
+    # Validate activities for this project
+    try:
+        validate_activities(activities)
+    except ValidationError as e:
+        log_warning(f"Project {project_code}: {e}")
+        return False
+
+    if args.validate_only:
+        log(f"  ✓ Validation passed", args.verbose, args.quiet)
+        return True
+
+    # Build graph and check for cycles
+    cpm_calculator = CriticalPathCalculator(activities)
+    cpm_calculator.build_graph_only()
+
+    cycles_detected = []
+    critical_paths = []
+    project_duration = 0.0
+
+    if cpm_calculator.has_cycles():
+        # Detect and report cycles
+        cycles_detected = cpm_calculator.detect_cycles()
+        log_warning(f"Project {project_code}: Found {len(cycles_detected)} circular dependencies")
+
+        # Write cycles log file
+        cycles_log_path = output_dir / f'{base_filename}_{project_code}_cycles.log'
+        write_cycles_log(cycles_log_path, cycles_detected, project_code)
+        log(f"  ✓ Generated {cycles_log_path.name}", args.verbose, args.quiet)
+    else:
+        # Calculate critical path (no cycles)
+        critical_paths, project_duration = cpm_calculator.calculate()
+
+        if critical_paths:
+            total_critical_activities = len(critical_paths[0]) if critical_paths else 0
+            log(
+                f"  ✓ Critical path: {total_critical_activities} activities, "
+                f"{project_duration / 8:.1f} days",
+                args.verbose,
+                args.quiet
+            )
+        else:
+            log(f"  ⚠ No critical path found", args.verbose, args.quiet)
+
+    # Export JSON files
+    if args.format in ['json', 'both']:
+        activities_json_path = output_dir / f'{base_filename}_{project_code}_activities.json'
+
+        json_exporter = JSONExporter(project_info, activities)
+        json_exporter.export_activities(str(activities_json_path))
+        log(f"  ✓ Generated {activities_json_path.name}", args.verbose, args.quiet)
+        output_files.append((activities_json_path, JSONExporter.get_file_size(str(activities_json_path))))
+
+        # Only export critical path if no cycles
+        if not cycles_detected:
+            critical_path_json_path = output_dir / f'{base_filename}_{project_code}_critical_path.json'
+            json_exporter.export_critical_path(
+                str(critical_path_json_path),
+                critical_paths,
+                project_duration
+            )
+            log(f"  ✓ Generated {critical_path_json_path.name}", args.verbose, args.quiet)
+            output_files.append((critical_path_json_path, JSONExporter.get_file_size(str(critical_path_json_path))))
+
+    # Export Markdown files
+    if args.format in ['markdown', 'both']:
+        activities_md_path = output_dir / f'{base_filename}_{project_code}_activities.md'
+
+        md_exporter = MarkdownExporter(project_info, activities)
+        md_exporter.export_activities(str(activities_md_path))
+        log(f"  ✓ Generated {activities_md_path.name}", args.verbose, args.quiet)
+        output_files.append((activities_md_path, JSONExporter.get_file_size(str(activities_md_path))))
+
+        # Only export critical path if no cycles
+        if not cycles_detected:
+            critical_path_md_path = output_dir / f'{base_filename}_{project_code}_critical_path.md'
+            md_exporter.export_critical_path(
+                str(critical_path_md_path),
+                critical_paths,
+                project_duration
+            )
+            log(f"  ✓ Generated {critical_path_md_path.name}", args.verbose, args.quiet)
+            output_files.append((critical_path_md_path, JSONExporter.get_file_size(str(critical_path_md_path))))
+
+    return True
+
+
 def main():
     """Main entry point"""
     args = parse_arguments()
@@ -240,7 +270,7 @@ def main():
     try:
         # Print header
         if not args.quiet:
-            print("XEReader v1.0 - Primavera P6 XER File Parser")
+            print("XEReader v2.0 - Primavera P6 XER File Parser")
             print()
 
         # Validate input file
@@ -261,48 +291,34 @@ def main():
         required_tables = ['PROJECT', 'TASK', 'TASKPRED']
         validate_required_tables(parser, required_tables)
 
-        # Process project information
+        # Process all projects
         activity_processor = ActivityProcessor()
-        project_info = activity_processor.process_project(parser.get_table('PROJECT'))
+        projects = activity_processor.process_all_projects(parser.get_table('PROJECT'))
 
-        log(f"  Project: {project_info.project_name} ({project_info.project_code})", args.verbose, args.quiet)
+        log(f"✓ Found {len(projects)} project(s)", args.verbose, args.quiet)
+        for proj in projects:
+            log(f"  - {proj.project_name} ({proj.project_code})", args.verbose, args.quiet)
 
-        # Process activities
-        activities = activity_processor.process_activities(parser.get_table('TASK'))
-        log(f"✓ Found {len(activities)} activities", args.verbose, args.quiet)
+        # Process all activities
+        all_activities = activity_processor.process_activities(parser.get_table('TASK'))
+        log(f"✓ Found {len(all_activities)} total activities", args.verbose, args.quiet)
 
-        # Deduplicate if requested
-        discarded_duplicates = {}
-        if args.deduplicate:
-            original_count = len(activities)
-            activities, discarded_duplicates = activity_processor.deduplicate_activities()
-            if discarded_duplicates:
-                removed_count = original_count - len(activities)
-                log_warning(f"Removed {removed_count} duplicate tasks ({len(discarded_duplicates)} unique codes)")
-                log(f"✓ Deduplicated to {len(activities)} activities", args.verbose, args.quiet)
-
-                # Write duplicates log immediately (before other processing that might fail)
-                output_dir = Path(args.output_dir)
-                output_dir.mkdir(parents=True, exist_ok=True)
-                base_filename = input_path.stem
-                duplicates_log_path = output_dir / f'{base_filename}_duplicates.log'
-                write_duplicates_log(duplicates_log_path, discarded_duplicates, activities)
-                log(f"✓ Generated {duplicates_log_path.name}", args.verbose, args.quiet)
-
-        # Process dependencies
+        # Process dependencies (only within-project)
         activity_processor.process_dependencies(parser.get_table('TASKPRED'))
 
         # Count total dependencies
-        total_deps = sum(len(a.predecessors) for a in activities)
-        log(f"✓ Built dependency graph ({total_deps} relationships)", args.verbose, args.quiet)
-
-        # Validate activities
-        warnings = validate_activities(activities, strict=not args.skip_duplicate_validation)
-        for warning in warnings:
-            log_warning(warning)
+        total_deps = sum(len(a.predecessors) for a in all_activities)
+        log(f"✓ Built dependency graph ({total_deps} within-project relationships)", args.verbose, args.quiet)
 
         if args.validate_only:
-            log("✓ Validation passed", args.verbose, args.quiet)
+            # Validate all activities
+            for proj in projects:
+                proj_activities = activity_processor.get_activities_for_project(proj.project_id)
+                try:
+                    validate_activities(proj_activities)
+                    log(f"✓ Project {proj.project_code}: Validation passed", args.verbose, args.quiet)
+                except ValidationError as e:
+                    log_warning(f"Project {proj.project_code}: {e}")
             return 0
 
         # Prepare output directory
@@ -310,82 +326,22 @@ def main():
         output_dir.mkdir(parents=True, exist_ok=True)
         base_filename = input_path.stem
 
-        # Build graph and check for cycles
-        cpm_calculator = CriticalPathCalculator(activities)
-        cpm_calculator.build_graph_only()
-
-        cycles_detected = []
-        critical_paths = []
-        project_duration = 0.0
-
-        if cpm_calculator.has_cycles():
-            # Detect and report cycles
-            cycles_detected = cpm_calculator.detect_cycles()
-            log_warning(f"Found {len(cycles_detected)} circular dependencies - skipping critical path calculation")
-
-            # Write cycles log file
-            cycles_log_path = output_dir / f'{base_filename}_cycles.log'
-            write_cycles_log(cycles_log_path, cycles_detected)
-            log(f"✓ Generated {cycles_log_path.name}", args.verbose, args.quiet)
-        else:
-            # Calculate critical path (no cycles)
-            critical_paths, project_duration = cpm_calculator.calculate()
-
-            if critical_paths:
-                total_critical_activities = len(critical_paths[0]) if critical_paths else 0
-                log(
-                    f"✓ Calculated critical path ({total_critical_activities} activities, "
-                    f"{project_duration / 8:.1f} days)",
-                    args.verbose,
-                    args.quiet
-                )
-            else:
-                log("⚠ Warning: No critical path found", args.verbose, args.quiet)
-
         output_files = []
 
-        # Export JSON files
-        if args.format in ['json', 'both']:
-            activities_json_path = output_dir / f'{base_filename}_activities.json'
+        # Process each project
+        for proj in projects:
+            proj_activities = activity_processor.get_activities_for_project(proj.project_id)
 
-            json_exporter = JSONExporter(project_info, activities)
-            json_exporter.export_activities(str(activities_json_path))
-            log(f"✓ Generated {activities_json_path.name}", args.verbose, args.quiet)
-            output_files.append((activities_json_path, JSONExporter.get_file_size(str(activities_json_path))))
+            if not proj_activities:
+                log_warning(f"Project {proj.project_code}: No activities found, skipping")
+                continue
 
-            # Only export critical path if no cycles
-            if not cycles_detected:
-                critical_path_json_path = output_dir / f'{base_filename}_critical_path.json'
-                json_exporter.export_critical_path(
-                    str(critical_path_json_path),
-                    critical_paths,
-                    project_duration
-                )
-                log(f"✓ Generated {critical_path_json_path.name}", args.verbose, args.quiet)
-                output_files.append((critical_path_json_path, JSONExporter.get_file_size(str(critical_path_json_path))))
-
-        # Export Markdown files
-        if args.format in ['markdown', 'both']:
-            activities_md_path = output_dir / f'{base_filename}_activities.md'
-
-            md_exporter = MarkdownExporter(project_info, activities)
-            md_exporter.export_activities(str(activities_md_path))
-            log(f"✓ Generated {activities_md_path.name}", args.verbose, args.quiet)
-            output_files.append((activities_md_path, JSONExporter.get_file_size(str(activities_md_path))))
-
-            # Only export critical path if no cycles
-            if not cycles_detected:
-                critical_path_md_path = output_dir / f'{base_filename}_critical_path.md'
-                md_exporter.export_critical_path(
-                    str(critical_path_md_path),
-                    critical_paths,
-                    project_duration
-                )
-                log(f"✓ Generated {critical_path_md_path.name}", args.verbose, args.quiet)
-                output_files.append((critical_path_md_path, JSONExporter.get_file_size(str(critical_path_md_path))))
+            process_single_project(
+                proj, proj_activities, output_dir, base_filename, args, output_files
+            )
 
         # Print output summary
-        if not args.quiet:
+        if not args.quiet and output_files:
             print()
             print("Output files:")
             for file_path, file_size in output_files:

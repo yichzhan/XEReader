@@ -25,6 +25,7 @@ class Activity:
 
     # Internal fields (not exported to JSON)
     task_id: Optional[int] = None           # Temporary: used during parsing only
+    proj_id: Optional[int] = None           # Project ID for multi-project XER files
     duration_hours: float = 0.0             # For CPM calculations
 
     # CPM calculation fields (for critical path)
