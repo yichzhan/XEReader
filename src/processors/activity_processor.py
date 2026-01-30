@@ -238,15 +238,21 @@ class ActivityProcessor:
         """
         return [a for a in self.activities if a.proj_id == proj_id]
 
-    def process_udf_values(self, udfvalue_table: List[Dict]) -> int:
+    def process_udf_values(
+        self,
+        udfvalue_table: List[Dict],
+        udftype_table: Optional[List[Dict]] = None
+    ) -> int:
         """
         Process UDFVALUE table and attach udf_text notes to activities.
 
         The UDFVALUE table links to activities via fk_id -> task_id.
         Only text values (udf_text) are extracted as notes.
+        If UDFTYPE table is provided, notes include the UDF type label.
 
         Args:
             udfvalue_table: UDFVALUE table rows
+            udftype_table: UDFTYPE table rows (optional, for label lookup)
 
         Returns:
             Number of notes attached to activities
@@ -254,8 +260,20 @@ class ActivityProcessor:
         if not udfvalue_table:
             return 0
 
-        # Build map of task_id -> list of udf_text values
-        task_notes: Dict[int, List[str]] = {}
+        # Build udf_type_id -> label map if UDFTYPE table provided
+        type_labels: Dict[int, str] = {}
+        if udftype_table:
+            for row in udftype_table:
+                try:
+                    type_id = int(row.get('udf_type_id', 0))
+                    label = row.get('udf_type_label', '')
+                    if type_id and label:
+                        type_labels[type_id] = label
+                except (ValueError, TypeError):
+                    continue
+
+        # Build map of task_id -> list of {label, text} dicts
+        task_notes: Dict[int, List[Dict[str, str]]] = {}
 
         for row in udfvalue_table:
             udf_text = row.get('udf_text')
@@ -272,12 +290,25 @@ class ActivityProcessor:
             except (ValueError, TypeError):
                 continue
 
+            # Get UDF type label
+            udf_type_id = row.get('udf_type_id')
+            label = "Note"  # Default label
+            if udf_type_id:
+                try:
+                    type_id = int(udf_type_id)
+                    label = type_labels.get(type_id, "Note")
+                except (ValueError, TypeError):
+                    pass
+
             if task_id not in task_notes:
                 task_notes[task_id] = []
 
-            # Avoid duplicate notes
-            if udf_text not in task_notes[task_id]:
-                task_notes[task_id].append(udf_text)
+            # Create note dict
+            note_dict = {"label": label, "text": udf_text}
+
+            # Avoid duplicate notes (check both label and text)
+            if note_dict not in task_notes[task_id]:
+                task_notes[task_id].append(note_dict)
 
         # Attach notes to activities
         notes_count = 0

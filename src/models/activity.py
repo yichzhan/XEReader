@@ -1,7 +1,7 @@
 """Activity data model"""
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 from .dependency import Dependency
 
 
@@ -24,7 +24,8 @@ class Activity:
     successors: List[Dependency] = field(default_factory=list)
 
     # Notes from UDFVALUE table (schedule change explanations)
-    notes: List[str] = field(default_factory=list)
+    # Each note is {"label": "UDF type label", "text": "note content"}
+    notes: List[Dict[str, str]] = field(default_factory=list)
 
     # Internal fields (not exported to JSON)
     task_id: Optional[int] = None           # Temporary: used during parsing only

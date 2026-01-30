@@ -305,7 +305,11 @@ def main():
 
         # Process UDF values (notes) if available
         if parser.has_table('UDFVALUE'):
-            notes_count = activity_processor.process_udf_values(parser.get_table('UDFVALUE'))
+            udftype_table = parser.get_table('UDFTYPE') if parser.has_table('UDFTYPE') else None
+            notes_count = activity_processor.process_udf_values(
+                parser.get_table('UDFVALUE'),
+                udftype_table
+            )
             if notes_count > 0:
                 log(f"✓ Attached {notes_count} notes to activities", args.verbose, args.quiet)
 

@@ -100,6 +100,106 @@ Session summary for project-based output implementation (2026-01-26)
 
 ---
 
+## 7. Analysis: Delay Reason Fields in XER Files
+
+**Date:** 2026-01-30
+
+**Question:** Is there a dedicated "delay reason" field in XER files?
+
+**Findings:**
+
+### UDF Types in Cracker_Schedule_Updated.xer
+
+| UDF ID | Label | Purpose |
+|--------|-------|---------|
+| 129 | user_text2 | Generic text field |
+| 137 | **EOT-60%MR** | Extension of Time - 60% Model Review |
+| 138 | **Remark** | Generic remarks |
+| 329 | user_text01 | Generic text field |
+| 829 | **备注** (Notes) | Generic notes (Chinese label) |
+| 1531 | **EOT** | Extension of Time |
+
+**Key insight:** UDF type 829 is NOT a dedicated delay category - it's a generic "Notes/Remarks" field. Delay information is stored there by convention, not by schema design.
+
+### Other Delay-Related Data in XER
+
+1. **TASK table** - Dedicated delay event activities:
+   - Task codes starting with `0000AE*` are delay events
+   - Examples: "Delay Event 01: HQC Beijing Office Lockdown by Covid-19 (3 Weeks)"
+   - Already captured as regular activities
+
+2. **TASK table fields** - `suspend_date` / `resume_date`:
+   - Track when activities were suspended/resumed
+   - Not currently exported
+
+3. **TASKMEMO table** - Task memos:
+   - HTML-encoded notes attached to tasks
+   - Not currently processed (would need HTML stripping)
+
+4. **PROJWBS table** - WBS categories:
+   - Contains "Delay Event 01", "Owner's Delay", etc.
+   - WBS hierarchy for organizing delay events
+
+### Current Implementation
+
+- Captures ALL `udf_text` values regardless of UDF type
+- No filtering by specific UDF categories
+- Delay reasons captured through generic notes field
+
+### Potential Enhancements (Not Implemented)
+
+1. Filter notes by specific UDF types (137, 829, 1531)
+2. Add UDF type label to output: `{"EOT": "...", "Remark": "..."}`
+3. Extract `suspend_date`/`resume_date` from TASK table
+4. Process TASKMEMO table with HTML stripping
+
+**Decision:** Keep current behavior (capture all notes). UDF type filtering can be added later if needed.
+
+---
+
+## 8. Enhancement: UDF Type Labels in Notes
+
+**Date:** 2026-01-30
+
+**Goal:** Add UDF type labels to notes for better categorization and filtering.
+
+**Previous format:**
+```json
+"notes": ["acceleration schedule pending on EOTR-001 results"]
+```
+
+**New format:**
+```json
+"notes": [
+  {"label": "备注", "text": "acceleration schedule pending on EOTR-001 results"},
+  {"label": "EOT", "text": "Y"}
+]
+```
+
+**Implementation:**
+
+| File | Change |
+|------|--------|
+| `src/models/activity.py` | Changed `notes: List[str]` to `notes: List[Dict[str, str]]` |
+| `src/processors/activity_processor.py` | Updated `process_udf_values()` to accept UDFTYPE table, build `udf_type_id → label` map |
+| `xereader.py` | Pass UDFTYPE table to `process_udf_values()` |
+| `src/exporters/markdown_exporter.py` | Display notes as `**label:** text` format |
+
+**Markdown output:**
+```
+- **Notes:**
+  - **备注:** acceleration schedule pending on EOTR-001 results
+  - **EOT:** Y
+```
+
+**Status:** ✅ Implemented (2026-01-30)
+
+**Test result:** `python xereader.py input/Cracker_Schedule_Updated.xer --format both --verbose`
+- 4135 notes attached to activities
+- Labels correctly mapped from UDFTYPE table
+
+---
+
 **Test command:** `python xereader.py "input/CTF-3-1 LIII Schedule2023-10-31.xer" --verbose`
 
 **Expected output:** 3 projects processed, 6 JSON files generated (2 per project), 1 cycles.log for CTF-3-1.

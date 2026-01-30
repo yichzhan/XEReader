@@ -169,11 +169,16 @@ class MarkdownExporter:
             notes = activity.get('notes', [])
             if notes:
                 if len(notes) == 1:
-                    lines.append(f"- **Notes:** {notes[0]}\n")
+                    note = notes[0]
+                    label = note.get('label', 'Note') if isinstance(note, dict) else 'Note'
+                    text = note.get('text', note) if isinstance(note, dict) else note
+                    lines.append(f"- **Notes:** **{label}:** {text}\n")
                 else:
                     lines.append("- **Notes:**\n")
                     for note in notes:
-                        lines.append(f"  - {note}\n")
+                        label = note.get('label', 'Note') if isinstance(note, dict) else 'Note'
+                        text = note.get('text', note) if isinstance(note, dict) else note
+                        lines.append(f"  - **{label}:** {text}\n")
 
             lines.append("\n---\n")
 
