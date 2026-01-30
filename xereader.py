@@ -303,6 +303,12 @@ def main():
         all_activities = activity_processor.process_activities(parser.get_table('TASK'))
         log(f"✓ Found {len(all_activities)} total activities", args.verbose, args.quiet)
 
+        # Process UDF values (notes) if available
+        if parser.has_table('UDFVALUE'):
+            notes_count = activity_processor.process_udf_values(parser.get_table('UDFVALUE'))
+            if notes_count > 0:
+                log(f"✓ Attached {notes_count} notes to activities", args.verbose, args.quiet)
+
         # Process dependencies (only within-project)
         activity_processor.process_dependencies(parser.get_table('TASKPRED'))
 

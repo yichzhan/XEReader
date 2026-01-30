@@ -165,6 +165,16 @@ class MarkdownExporter:
             else:
                 lines.append("- Successors: None\n")
 
+            # Notes (from UDFVALUE table)
+            notes = activity.get('notes', [])
+            if notes:
+                if len(notes) == 1:
+                    lines.append(f"- **Notes:** {notes[0]}\n")
+                else:
+                    lines.append("- **Notes:**\n")
+                    for note in notes:
+                        lines.append(f"  - {note}\n")
+
             lines.append("\n---\n")
 
         # Summary statistics

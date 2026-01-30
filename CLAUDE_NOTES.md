@@ -61,6 +61,45 @@ Session summary for project-based output implementation (2026-01-26)
 
 ---
 
+## 6. Planned Feature: Activity Notes from UDFVALUE
+
+**Date:** 2026-01-30
+
+**Goal:** Include `udf_text` from UDFVALUE table as activity notes to explain schedule changes.
+
+**Data mapping:**
+- `UDFVALUE.fk_id` → `TASK.task_id` → `Activity`
+- `UDFVALUE.udf_text` contains schedule change explanations (e.g., "acceleration schedule pending on EOTR-001 results")
+
+**Implementation plan:**
+
+| File | Change |
+|------|--------|
+| `src/models/activity.py` | Add `notes: List[str] = field(default_factory=list)` |
+| `src/processors/activity_processor.py` | Process UDFVALUE table, build `task_id → [udf_text]` map, attach to activities |
+| `src/exporters/json_exporter.py` | Include `notes` array in `to_dict()` output |
+| `src/exporters/markdown_exporter.py` | Display notes as bullet points under each activity |
+
+**Output example (JSON):**
+```json
+{
+  "task_code": "A1234",
+  "task_name": "Installation Work",
+  "notes": ["acceleration schedule pending on EOTR-001 results"],
+  ...
+}
+```
+
+**Source file:** Found in `examples/Cracker_Schedule_Updated.xer` (27 activities have EOTR-001 notes)
+
+**Status:** ✅ Implemented (2026-01-30)
+
+**Test result:** `python xereader.py examples/Cracker_Schedule_Updated.xer --format both --verbose`
+- 4011 notes attached to activities
+- EOTR-001 notes appear in both JSON and Markdown output
+
+---
+
 **Test command:** `python xereader.py "input/CTF-3-1 LIII Schedule2023-10-31.xer" --verbose`
 
 **Expected output:** 3 projects processed, 6 JSON files generated (2 per project), 1 cycles.log for CTF-3-1.

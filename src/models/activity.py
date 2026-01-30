@@ -23,6 +23,9 @@ class Activity:
     predecessors: List[Dependency] = field(default_factory=list)
     successors: List[Dependency] = field(default_factory=list)
 
+    # Notes from UDFVALUE table (schedule change explanations)
+    notes: List[str] = field(default_factory=list)
+
     # Internal fields (not exported to JSON)
     task_id: Optional[int] = None           # Temporary: used during parsing only
     proj_id: Optional[int] = None           # Project ID for multi-project XER files
@@ -43,7 +46,7 @@ class Activity:
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON export (activities.json format)"""
-        return {
+        result = {
             "task_code": self.task_code,
             "task_name": self.task_name,
             "planned_start_date": self.planned_start_date.isoformat() + 'Z' if self.planned_start_date else None,
@@ -69,6 +72,10 @@ class Activity:
                 ]
             }
         }
+        # Only include notes if present
+        if self.notes:
+            result["notes"] = self.notes
+        return result
 
     def to_critical_path_dict(self, sequence: int) -> dict:
         """Convert to dictionary for critical_path.json format"""

@@ -108,6 +108,7 @@ XER File → Parser → Activity Objects → Group by Project → CPM Calculator
    - `group_by_project()` - Groups activities by project ID
    - `get_activities_for_project(proj_id)` - Returns activities for specific project
    - Resolves dependencies (only within-project links)
+   - Processes UDFVALUE table to attach `notes` (udf_text) to activities
 
 3. **Critical Path Calculator** (`src/processors/critical_path_calculator.py`)
    - Builds network graph (NetworkX)
@@ -177,6 +178,12 @@ XER File → Parser → Activity Objects → Group by Project → CPM Calculator
    - Automatic cycle detection before CPM (per project)
    - Generates `{xer}_{project}_cycles.log` with cycle details
    - Activities export still works; critical path is skipped
+
+9. **Activity notes from UDFVALUE**
+   - `udf_text` values from UDFVALUE table attached to activities as `notes`
+   - Links via `UDFVALUE.fk_id` → `TASK.task_id`
+   - Used for schedule change explanations (e.g., "acceleration schedule pending on EOTR-001 results")
+   - Exported as array in JSON (only if notes exist), bullet list in Markdown
 
 ---
 
@@ -261,5 +268,5 @@ XER File → Parser → Activity Objects → Group by Project → CPM Calculator
 
 ---
 
-**Version:** 3.0
-**Last Updated:** 2026-01-26
+**Version:** 3.1
+**Last Updated:** 2026-01-30

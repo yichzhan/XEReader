@@ -237,3 +237,53 @@ class ActivityProcessor:
             List of Activity objects belonging to the project
         """
         return [a for a in self.activities if a.proj_id == proj_id]
+
+    def process_udf_values(self, udfvalue_table: List[Dict]) -> int:
+        """
+        Process UDFVALUE table and attach udf_text notes to activities.
+
+        The UDFVALUE table links to activities via fk_id -> task_id.
+        Only text values (udf_text) are extracted as notes.
+
+        Args:
+            udfvalue_table: UDFVALUE table rows
+
+        Returns:
+            Number of notes attached to activities
+        """
+        if not udfvalue_table:
+            return 0
+
+        # Build map of task_id -> list of udf_text values
+        task_notes: Dict[int, List[str]] = {}
+
+        for row in udfvalue_table:
+            udf_text = row.get('udf_text')
+            if not udf_text:
+                continue
+
+            # fk_id links to task_id for task-level UDFs
+            fk_id = row.get('fk_id')
+            if not fk_id:
+                continue
+
+            try:
+                task_id = int(fk_id)
+            except (ValueError, TypeError):
+                continue
+
+            if task_id not in task_notes:
+                task_notes[task_id] = []
+
+            # Avoid duplicate notes
+            if udf_text not in task_notes[task_id]:
+                task_notes[task_id].append(udf_text)
+
+        # Attach notes to activities
+        notes_count = 0
+        for activity in self.activities:
+            if activity.task_id and activity.task_id in task_notes:
+                activity.notes = task_notes[activity.task_id]
+                notes_count += len(activity.notes)
+
+        return notes_count
