@@ -97,7 +97,8 @@ XER File → Parser → Activity Objects → Group by Project → CPM Calculator
 
 1. **XER Parser** (`src/parser/`)
    - Reads XER file (tab-delimited format)
-   - Extracts PROJECT, TASK, TASKPRED tables
+   - Supports UTF-8, GBK (Chinese), and latin-1 encodings
+   - Extracts PROJECT, TASK, TASKPRED, UDFVALUE, UDFTYPE tables
    - Returns raw data dictionaries
 
 2. **Activity Processor** (`src/processors/activity_processor.py`)
@@ -227,7 +228,8 @@ XER File → Parser → Activity Objects → Group by Project → CPM Calculator
 ## Debugging Tips
 
 ### XER Parsing Issues
-- Check file encoding (UTF-8 vs latin-1)
+- Check file encoding (UTF-8, GBK for Chinese, or latin-1)
+- Chinese text uses GBK encoding - parser tries GBK before latin-1
 - Verify table markers (%T, %F, %R)
 - Check for tab characters (not spaces)
 
@@ -269,5 +271,5 @@ XER File → Parser → Activity Objects → Group by Project → CPM Calculator
 
 ---
 
-**Version:** 3.2
-**Last Updated:** 2026-01-30
+**Version:** 3.3
+**Last Updated:** 2026-01-31

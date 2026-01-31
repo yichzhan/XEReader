@@ -200,6 +200,51 @@ Session summary for project-based output implementation (2026-01-26)
 
 ---
 
+## 9. Fix: Chinese Character Encoding (GBK)
+
+**Date:** 2026-01-31
+
+**Problem:** Chinese characters in UDF labels (e.g., `备注`) appeared garbled as `±¸×¢` in output files.
+
+**Root cause:** XER files from Chinese P6 installations use GBK encoding for Chinese text, but the parser was falling back to latin-1 which misinterpreted the bytes.
+
+**Analysis:**
+```
+Bytes in file: \xb1\xb8\xd7\xa2
+GBK decode:    备注  ✓
+latin-1:       ±¸×¢  ✗
+```
+
+**Solution:** Updated `src/parser/xer_parser.py` to try GBK encoding with `errors='replace'` before falling back to latin-1.
+
+**Encoding priority:**
+1. UTF-8 (strict) - for modern XER files
+2. GBK with `errors='replace'` - for Chinese XER files (preserves Chinese, replaces invalid bytes)
+3. latin-1 (fallback) - always succeeds but may garble non-ASCII
+
+**Implementation:**
+```python
+# First try UTF-8 (strict)
+try:
+    with open(self.file_path, 'r', encoding='utf-8') as f:
+        content = f.readlines()
+except UnicodeDecodeError:
+    pass
+
+# Then try GBK with replacement for invalid bytes
+if content is None:
+    with open(self.file_path, 'r', encoding='gbk', errors='replace') as f:
+        content = f.readlines()
+```
+
+**Status:** ✅ Fixed (2026-01-31)
+
+**Test result:**
+- Chinese labels now display correctly: `"label": "备注"`
+- Only 1 replacement character in entire file (at byte position 656, in CURRTYPE table)
+
+---
+
 **Test command:** `python xereader.py "input/CTF-3-1 LIII Schedule2023-10-31.xer" --verbose`
 
 **Expected output:** 3 projects processed, 6 JSON files generated (2 per project), 1 cycles.log for CTF-3-1.
