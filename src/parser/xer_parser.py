@@ -30,20 +30,29 @@ class XERParser:
         if not os.path.exists(self.file_path):
             raise FileNotFoundError(f"XER file not found: {self.file_path}")
 
-        # Try different encodings (XER files can be UTF-8 or latin-1)
-        encodings = ['utf-8', 'latin-1', 'cp1252']
+        # Try different encodings (XER files can be UTF-8, GBK for Chinese, or latin-1)
+        # GBK is tried with errors='replace' to handle mixed-encoding files
         content = None
 
-        for encoding in encodings:
-            try:
-                with open(self.file_path, 'r', encoding=encoding) as f:
-                    content = f.readlines()
-                break
-            except UnicodeDecodeError:
-                continue
+        # First try UTF-8 (strict)
+        try:
+            with open(self.file_path, 'r', encoding='utf-8') as f:
+                content = f.readlines()
+        except UnicodeDecodeError:
+            pass
 
+        # Then try GBK with replacement for invalid bytes (preserves Chinese characters)
         if content is None:
-            raise ValueError(f"Could not read file with supported encodings: {encodings}")
+            try:
+                with open(self.file_path, 'r', encoding='gbk', errors='replace') as f:
+                    content = f.readlines()
+            except Exception:
+                pass
+
+        # Fall back to latin-1 (always succeeds but may garble non-ASCII)
+        if content is None:
+            with open(self.file_path, 'r', encoding='latin-1') as f:
+                content = f.readlines()
 
         self._parse_tables(content)
         return self.tables
